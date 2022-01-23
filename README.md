@@ -7,4 +7,4 @@ The easiest way to run this if you do not have a Jupyter installation of your ow
 4. Open the ipynb file
 5. Hit the |>|> button
 
-Let me (Bijak#4704 on Discord) know on the JPDB Discord if you have any requests or want to add to it here!
+Let me know on the JPDB Discord if you have any requests or want to add anything to the notebook yourself!
