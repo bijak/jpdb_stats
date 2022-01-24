@@ -2,12 +2,14 @@ import base64
 from datetime import datetime
 import io
 import json
+import pytz
 
 import dash
 from dash.dependencies import Input, Output
 import dash_bootstrap_components as dbc
 import dash_core_components as dcc
 import dash_html_components as html
+from matplotlib.pyplot import hist
 
 import pandas as pd
 
@@ -17,12 +19,23 @@ template = "plotly_dark"
 colors = {"background": "#111111", "text": "#ffffff"}
 default_fig = {}
 
+timezone_list = []
+for tz in pytz.all_timezones_set:
+    timezone_list.append({'label':tz, 'value':tz})
+
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 server = app.server
 
 app.layout = html.Div(
     [
         html.H1("JPDB Stats"),
+        dcc.Dropdown(
+            id='timezone-dropdown',
+            options=timezone_list,
+            value='America/New_York',
+            style={'color': 'black'}
+        ),
+        dcc.Store(id='timezone'),
         dcc.Upload(
             id="upload-data",
             children=html.Div(["This should be the vocabulary-reviews.json downloaded from the JPDB Settings page. Drag and Drop or ", html.A("Select File")]),
@@ -39,6 +52,8 @@ app.layout = html.Div(
             # Allow multiple files to be uploaded
             multiple=False,
         ),
+        html.H3("Overall"),
+        dcc.Graph(id="overall", figure=default_fig),
         html.H3("New Cards"),
         dcc.Graph(id="new_cum", figure=default_fig),
         dcc.Graph(id="new_daily", figure=default_fig),
@@ -51,47 +66,52 @@ app.layout = html.Div(
 
 
 @app.callback(
-    [Output("new_cum", "figure"),Output("new_daily", "figure"),Output("rev_cum", "figure"),Output("rev_daily", "figure")],
-    [Input("upload-data", "contents"), Input("upload-data", "filename")],
+    [Output("new_cum", "figure"),Output("new_daily", "figure"),Output("rev_cum", "figure"),Output("rev_daily", "figure"),Output("overall", "figure")],
+    [Input("upload-data", "contents"), Input("upload-data", "filename"), Input("timezone", "data")],
 )
-def update_graph(contents, filename):
-    f_nc = default_fig; f_nd = default_fig; f_rc = default_fig; f_rd = default_fig
+def update_graph(contents, filename, timezone):
+    f_nc = default_fig; f_nd = default_fig; f_rc = default_fig; f_rd = default_fig; f_overall = default_fig
     if filename == 'vocabulary-reviews.json':
         contents = contents.split(',')
         contents = contents[1]
-        new, rev = parse_data(contents, filename)
+        new, rev, history = parse_data(contents, filename, timezone)
         f_rc, f_rd = parse_reviews(rev)
         f_nc, f_nd = parse_new(new)
+        f_overall = parse_history(history)
 
-    return [f_nc, f_nd, f_rc, f_rd]
+    return [f_nc, f_nd, f_rc, f_rd, f_overall]
 
 @app.callback(
-    [Output("new_cum", "style"),Output("new_daily", "style"),Output("rev_cum", "style"),Output("rev_daily", "style")],
+    [Output("new_cum", "style"),Output("new_daily", "style"),Output("rev_cum", "style"),Output("rev_daily", "style"), Output("overall", "style")],
     [Input("upload-data", "filename")],
 )
 def update_display(filename):
     if filename == 'vocabulary-reviews.json':
-        return [{"display":"block"},{"display":"block"},{"display":"block"},{"display":"block"}]
+        return [{"display":"block"},{"display":"block"},{"display":"block"},{"display":"block"},{"display":"block"}]
     else:
-        return [{"display":"none"},{"display":"none"},{"display":"none"},{"display":"none"}]
+        return [{"display":"none"},{"display":"none"},{"display":"none"},{"display":"none"},{"display":"none"}]
 
+@app.callback(Output("timezone","data"), [Input("timezone-dropdown","value")])
+def update_timezone(value):
+    return value
 
-
-def parse_data(contents, filename):
+def parse_data(contents, filename, timezone):
     decoded = base64.b64decode(contents)
     new = []
     rev = []
+    history = []
     try:
         reviews_json = json.load(io.StringIO(decoded.decode("utf-8")))
         for entry in reviews_json["cards_vocabulary_jp_en"]:
-            new.append(datetime.utcfromtimestamp(entry['reviews'][0]['timestamp']).date())
+            new.append(datetime.utcfromtimestamp(entry['reviews'][0]['timestamp']).astimezone(pytz.timezone(timezone)).date())
             for review in entry['reviews']:
-                rev.append(datetime.utcfromtimestamp(review['timestamp']).date())
+                rev.append(datetime.utcfromtimestamp(review['timestamp']).astimezone(pytz.timezone(timezone)).date())
+            history += parse_entry(entry, timezone)
     except Exception as e:
         print(e)
         return html.Div(["Make sure to upload the vocabulary-reviews.json downloadable in your jpdb.io Settings"])
 
-    return new, rev
+    return new, rev, history
 
 def parse_reviews(rev):
     reviews = pd.DataFrame(rev, columns=['Date'])
@@ -148,6 +168,45 @@ def parse_new(new_in):
     )
 
     return f_nc, f_nd
+
+def is_successful(string):
+    if string in ['known', 'pass', 'hard', 'easy', 'okay']:
+        return 1
+    return 0
+
+def is_fail(string):
+    if string in ['known', 'pass', 'hard', 'easy', 'okay']:
+        return 0
+    return 1
+
+# The idea here is not to count reviews that are either the first review for a word or reviews that aren't the first review of the day
+def parse_entry(entry, timezone):
+    history = []
+    previous = None
+    for review in entry['reviews']:
+        if previous is None:
+            history.append([datetime.utcfromtimestamp(review['timestamp']).date(), 0, 0, 1])
+        elif (previous is not None) and (datetime.utcfromtimestamp(previous['timestamp']).astimezone(pytz.timezone(timezone)).date() != datetime.utcfromtimestamp(review['timestamp']).date()):
+            history.append([datetime.utcfromtimestamp(review['timestamp']).astimezone(pytz.timezone(timezone)).date(), is_fail(review['grade']), is_successful(review['grade']), 0 ])
+        previous = review
+    return history
+
+def parse_history(history):
+    history_df = pd.DataFrame(history, columns=['Date', 'Failed', 'Passed', 'New'])
+    history_df = history_df.groupby('Date').sum()
+    idx = pd.date_range(history_df.index.min(), history_df.index.max())
+    history_df.index = pd.DatetimeIndex(history_df.index)
+    history_df = history_df.reindex(idx, fill_value=0)
+    colors = ['#EF553B','#00CC96','#636EFA']
+    f_history = history_df.plot(kind='bar', color_discrete_sequence=colors)
+    f_history.update_layout(
+        title="Cards (Daily)",
+        yaxis_title="Card Count",
+        xaxis_title="Date",
+        template=template
+    )
+    return f_history
+
 
 if __name__ == "__main__":
     app.run_server(debug=True)
