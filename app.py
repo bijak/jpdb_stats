@@ -1,18 +1,19 @@
 import base64
-import datetime
+from datetime import datetime
 import io
 import plotly.graph_objs as go
 import json
+import plotly.express as px
 
 import dash
 from dash.dependencies import Input, Output, State
 import dash_core_components as dcc
 import dash_html_components as html
-import dash_table
 
 import pandas as pd
 
 external_stylesheets = ["https://codepen.io/chriddyp/pen/bWLwgP.css"]
+pd.options.plotting.backend = "plotly"
 
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 server = app.server
@@ -40,42 +41,34 @@ app.layout = html.Div(
         dcc.Graph(id="new_cum"),
         dcc.Graph(id="new_daily"),
         dcc.Graph(id="rev_cum"),
-        dcc.Graph(id="rev_daily"),
+        dcc.Graph(id="rev_daily")
     ]
 )
 
 
 @app.callback(
-    [Output("new_cum", "f_nc"),Output("new_daily", "f_nd"),Output("rev_cum", "f_rc"),Output("rev_daily", "f_rd")],
+    [Output("new_cum", "figure"),Output("new_daily", "figure"),Output("rev_cum", "figure"),Output("rev_daily", "figure")],
     [Input("upload-data", "contents"), Input("upload-data", "filename")],
 )
 def update_graph(contents, filename):
-    fig = {
-        "layout": go.Layout(
-            plot_bgcolor=colors["graphBackground"],
-            paper_bgcolor=colors["graphBackground"],
-        )
-    }
-
+    f_nc = {}; f_nd = {}; f_rc = {}; f_rd = {}
     if contents:
-        contents = contents[0]
-        filename = filename[0]
+        contents = contents.split(',')
+        contents = contents[1]
         new, rev = parse_data(contents, filename)
         f_rc, f_rd = parse_reviews(rev)
         f_nc, f_nd = parse_new(new)
 
-    return f_nc, f_nd, f_rc, f_rd
+    return [f_nc, f_nd, f_rc, f_rd]
 
 
 def parse_data(contents, filename):
-    content_type, content_string = contents.split(",")
-
-    decoded = base64.b64decode(content_string)
+    decoded = base64.b64decode(contents)
+    new = []
+    rev = []
     try:
         if filename == 'vocabulary-reviews.json':
             reviews_json = json.load(io.StringIO(decoded.decode("utf-8")))
-            new = []
-            rev = []
             for entry in reviews_json["cards_vocabulary_jp_en"]:
                 new.append(datetime.utcfromtimestamp(entry['reviews'][0]['timestamp']).date())
                 for review in entry['reviews']:
@@ -87,20 +80,6 @@ def parse_data(contents, filename):
     return new, rev
 
 def parse_reviews(rev):
-    f_rc = {
-        "layout": go.Layout(
-            plot_bgcolor=colors["graphBackground"],
-            paper_bgcolor=colors["graphBackground"],
-        )
-    }
-
-    f_rd = {
-        "layout": go.Layout(
-            plot_bgcolor=colors["graphBackground"],
-            paper_bgcolor=colors["graphBackground"],
-        )
-    }
-
     reviews = pd.DataFrame(rev, columns=['Date'])
     reviews['Count'] = 1
     reviews = reviews.groupby('Date').sum()
@@ -110,35 +89,21 @@ def parse_reviews(rev):
     reviews = reviews.reindex(idx, fill_value=0)
     reviews_cum = reviews.cumsum()
     # Cum. Plot
-    p_rc = reviews_cum.iplot(asFigure=True)
-    p_rc.set_ylabel("Total reviews")
-    p_rc.set_title("Reviews (Cum.)")
-    p_rc.set_ylim(bottom=0)
-    f_rc["data"] = p_rc
+    f_rc = reviews_cum.plot()
+    f_rc.update_layout(
+        title="Reviews (Cum.)",
+        yaxis_title="Total reviews"
+    )
     # Cum. Plot
-    p_rd = reviews.iplot(asFigure=True)
-    p_rd.set_ylabel("Daily reviews")
-    p_rd.set_title("Reviews (Daily)")
-    p_rd.set_ylim(bottom=0)
-    f_rd["data"] = p_rd
+    f_rd = reviews.plot()
+    f_rd.update_layout(
+        title="Reviews (Daily)",
+        yaxis_title="Daily reviews"
+    )
 
     return f_rc, f_rd
 
 def parse_new(new_in):
-    f_nc = {
-        "layout": go.Layout(
-            plot_bgcolor=colors["graphBackground"],
-            paper_bgcolor=colors["graphBackground"],
-        )
-    }
-
-    f_nd = {
-        "layout": go.Layout(
-            plot_bgcolor=colors["graphBackground"],
-            paper_bgcolor=colors["graphBackground"],
-        )
-    }
-
     new = pd.DataFrame(new_in, columns=['Date'])
     new['Count'] = 1
     new = new.groupby('Date').sum()
@@ -148,17 +113,17 @@ def parse_new(new_in):
     new = new.reindex(idx, fill_value=0)
     new_cum = new.cumsum()
     # Cum. Plot
-    p_nc = new_cum.iplot(asFigure=True)
-    p_nc.set_ylabel("Total cards added")
-    p_nc.set_title("New Cards (Cum.)")
-    p_nc.set_ylim(bottom=0)
-    f_nc["data"] = p_nc
-    # Cum. Plot
-    p_nd = new.iplot(asFigure=True)
-    p_nd.set_ylabel("Daily cards added")
-    p_nd.set_title("New Cards (Daily)")
-    p_nd.set_ylim(bottom=0)
-    f_nd["data"] = p_nd
+    f_nc = new_cum.plot()
+    f_nc.update_layout(
+        title="New Cards (Cum.)",
+        yaxis_title="Total cards added"
+    )
+    # Daily. Plot
+    f_nd = new.plot()
+    f_nd.update_layout(
+        title="New Cards (Daily)",
+        yaxis_title="New Cards"
+    )
 
     return f_nc, f_nd
 
