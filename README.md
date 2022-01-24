@@ -1,10 +1,7 @@
-# JPDB Stats notebook
+# JPDB Stats
 
-The easiest way to run this if you do not have a Jupyter installation of your own is to 
-1. go to https://jupyter.org/try 
-2. click on JupyterLab
-3. Upload the jpdb_stats.ipynb from this repo and your vocabulary-reviews.json downloadable from the settings page (at the bottom)
-4. Open the ipynb file
-5. Hit the |>|> button
+The hosted version of this Dash app can be found at https://jpdb-stats.herokuapp.com/
+
+To use: just upload the vocabulary-reviews.json file you can download at the bottom of the settings page at https://jpdb.io/settings
 
 Let me know on the JPDB Discord if you have any requests or want to add anything to the notebook yourself!
