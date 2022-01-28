@@ -20,7 +20,7 @@ colors = {"background": "#111111", "text": "#ffffff"}
 default_fig = {}
 
 timezone_list = []
-for tz in pytz.all_timezones_set:
+for tz in pytz.common_timezones:
     timezone_list.append({'label':tz, 'value':tz})
 
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
