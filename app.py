@@ -9,6 +9,7 @@ from dash.dependencies import Input, Output
 import dash_bootstrap_components as dbc
 import dash_core_components as dcc
 import dash_html_components as html
+import dash_table
 from matplotlib.pyplot import hist
 
 import pandas as pd
@@ -18,6 +19,8 @@ pd.options.plotting.backend = "plotly"
 template = "plotly_dark"
 colors = {"background": "#111111", "text": "#ffffff"}
 default_fig = {}
+default_df = pd.DataFrame(columns=["Word", "Total Reviews", "Time to Learn", "No. Relapses"])
+default_table = default_df.to_dict('records')
 
 timezone_list = []
 for tz in pytz.common_timezones:
@@ -59,27 +62,49 @@ app.layout = html.Div(
         dcc.Graph(id="new_daily", figure=default_fig),
         html.H3("Reviews"),
         dcc.Graph(id="rev_cum", figure=default_fig),
-        dcc.Graph(id="rev_daily", figure=default_fig)
+        dcc.Graph(id="rev_daily", figure=default_fig),
+        html.H3("Problem words"),
+        dash_table.DataTable(
+            id='datatable-struggles',
+            columns=[
+                {"name": i, "id": i} for i in default_df.columns
+            ],
+            data=default_table,
+            sort_action="native",
+            page_action="native",
+            page_current= 0,
+            page_size= 25,
+            style_header={
+                'backgroundColor': 'rgb(30, 30, 30)',
+                'color': 'white'
+            },
+            style_data={
+                'backgroundColor': 'rgb(50, 50, 50)',
+                'color': 'white'
+            }
+        ),
+        html.Div(id='datatable-struggles-container')
     ],
     style={'backgroundColor':colors["background"]}
 )
 
 
 @app.callback(
-    [Output("new_cum", "figure"),Output("new_daily", "figure"),Output("rev_cum", "figure"),Output("rev_daily", "figure"),Output("overall", "figure")],
+    [Output("new_cum", "figure"),Output("new_daily", "figure"),Output("rev_cum", "figure"),Output("rev_daily", "figure"),Output("overall", "figure"),Output("datatable-struggles","data")],
     [Input("upload-data", "contents"), Input("upload-data", "filename"), Input("timezone", "data")],
 )
 def update_graph(contents, filename, timezone):
-    f_nc = default_fig; f_nd = default_fig; f_rc = default_fig; f_rd = default_fig; f_overall = default_fig
+    f_nc = default_fig; f_nd = default_fig; f_rc = default_fig; f_rd = default_fig; f_overall = default_fig; datatable = default_table
     if filename == 'vocabulary-reviews.json':
         contents = contents.split(',')
         contents = contents[1]
-        new, rev, history = parse_data(contents, filename, timezone)
+        new, rev, history, struggles = parse_data(contents, filename, timezone)
         f_rc, f_rd = parse_reviews(rev)
         f_nc, f_nd = parse_new(new)
         f_overall = parse_history(history)
+        datatable = pd.DataFrame(struggles, columns=["Word", "Total Reviews", "Time to Learn", "No. Relapses"]).to_dict('records')
 
-    return [f_nc, f_nd, f_rc, f_rd, f_overall]
+    return [f_nc, f_nd, f_rc, f_rd, f_overall, datatable]
 
 @app.callback(
     [Output("new_cum", "style"),Output("new_daily", "style"),Output("rev_cum", "style"),Output("rev_daily", "style"), Output("overall", "style")],
@@ -100,6 +125,7 @@ def parse_data(contents, filename, timezone):
     new = []
     rev = []
     history = []
+    struggles = []
     try:
         reviews_json = json.load(io.StringIO(decoded.decode("utf-8")))
         for entry in reviews_json["cards_vocabulary_jp_en"]:
@@ -107,11 +133,12 @@ def parse_data(contents, filename, timezone):
             for review in entry['reviews']:
                 rev.append(datetime.utcfromtimestamp(review['timestamp']).astimezone(pytz.timezone(timezone)).date())
             history += parse_entry(entry, timezone)
+            struggles += parse_struggles(entry)
     except Exception as e:
         print(e)
         return html.Div(["Make sure to upload the vocabulary-reviews.json downloadable in your jpdb.io Settings"])
 
-    return new, rev, history
+    return new, rev, history, struggles
 
 def parse_reviews(rev):
     reviews = pd.DataFrame(rev, columns=['Date'])
@@ -205,7 +232,44 @@ def parse_history(history):
         xaxis_title="Date",
         template=template
     )
-    return f_history
+    return f_history\
+
+def parse_struggles(entry):
+    time_to_learn = 0
+    relapses = 0
+    everKnown = False
+    isKnown = False
+    consecutive_success = 0
+    for review in entry['reviews']:
+        if is_successful(review['grade']):
+            if (not everKnown) and (time_to_learn < 1):
+                everKnown = True
+                isKnown = True
+            elif (not everKnown) and (consecutive_success == 2):
+                everKnown = True
+                isKnown = True
+                time_to_learn += 1
+            elif (not everKnown):
+                consecutive_success += 1
+                time_to_learn += 1
+            elif (not isKnown) and (consecutive_success == 2):
+                isKnown = True
+                time_to_learn += 1
+            elif not isKnown:
+                consecutive_success += 1
+                time_to_learn += 1
+        else:
+            consecutive_success = 0
+            if isKnown:
+                isKnown = False
+                relapses += 1
+            if not everKnown:
+                time_to_learn += 1
+    return [[entry['spelling'], len(entry['reviews']), time_to_learn, relapses]]    
+    
+
+
+
 
 
 if __name__ == "__main__":
