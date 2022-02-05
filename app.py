@@ -254,10 +254,8 @@ def parse_struggles(entry):
                 time_to_learn += 1
             elif (not isKnown) and (consecutive_success == 2):
                 isKnown = True
-                time_to_learn += 1
             elif not isKnown:
                 consecutive_success += 1
-                time_to_learn += 1
         else:
             consecutive_success = 0
             if isKnown:
