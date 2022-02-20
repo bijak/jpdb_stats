@@ -95,7 +95,7 @@ app.layout = html.Div(
 )
 def update_graph(contents, filename, timezone):
     f_nc = default_fig; f_nd = default_fig; f_rc = default_fig; f_rd = default_fig; f_overall = default_fig; datatable = default_table
-    if filename == 'vocabulary-reviews.json':
+    if (filename is not None) and filename.startswith('vocabulary'):
         contents = contents.split(',')
         contents = contents[1]
         new, rev, history, struggles = parse_data(contents, filename, timezone)
@@ -111,7 +111,7 @@ def update_graph(contents, filename, timezone):
     [Input("upload-data", "filename")],
 )
 def update_display(filename):
-    if filename == 'vocabulary-reviews.json':
+    if (filename is not None) and filename.startswith('vocabulary'):
         return [{"display":"block"},{"display":"block"},{"display":"block"},{"display":"block"},{"display":"block"}]
     else:
         return [{"display":"none"},{"display":"none"},{"display":"none"},{"display":"none"},{"display":"none"}]
@@ -129,6 +129,8 @@ def parse_data(contents, filename, timezone):
     try:
         reviews_json = json.load(io.StringIO(decoded.decode("utf-8")))
         for entry in reviews_json["cards_vocabulary_jp_en"]:
+            if (len(entry['reviews']) == 0):
+                continue
             new.append(datetime.utcfromtimestamp(entry['reviews'][0]['timestamp']).astimezone(pytz.timezone(timezone)).date())
             for review in entry['reviews']:
                 rev.append(datetime.utcfromtimestamp(review['timestamp']).astimezone(pytz.timezone(timezone)).date())
