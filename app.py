@@ -245,11 +245,12 @@ def parse_history(history):
 def parse_retention(history):
     retention_df = pd.DataFrame(history, columns=['Date', 'Failed', 'Passed', 'New'])
     retention_df = retention_df.groupby('Date').sum()
-    retention_df['Retention'] = 100 * retention_df['Passed'] / (retention_df['Passed'] + retention_df['Failed'])
-    retention_df['Rolling Average'] = retention_df.rolling(7)['Retention'].mean()
     idx = pd.date_range(retention_df.index.min(), retention_df.index.max())
     retention_df.index = pd.DatetimeIndex(retention_df.index)
-    retention_df = retention_df.reindex(idx, fill_value=np.nan)
+    retention_df = retention_df.reindex(idx, fill_value=0)
+    retention_df['Retention'] = 100 * retention_df['Passed'] / (retention_df['Passed'] + retention_df['Failed'])
+    window_df = retention_df.rolling(7).sum()
+    retention_df['Rolling Average'] = 100 * window_df['Passed'] / (window_df['Passed'] + window_df['Failed'])
     f_retention = retention_df.plot(y='Retention', kind='bar')
     f_retention.add_trace(
         go.Scatter(
@@ -295,11 +296,6 @@ def parse_struggles(entry):
             if not everKnown:
                 time_to_learn += 1
     return [[entry['spelling'], len(entry['reviews']), time_to_learn, relapses]]    
-    
-
-
-
-
 
 if __name__ == "__main__":
     app.run_server(debug=True)
