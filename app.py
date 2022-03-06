@@ -11,8 +11,10 @@ import dash_core_components as dcc
 import dash_html_components as html
 import dash_table
 from matplotlib.pyplot import hist
+import plotly.graph_objects as go
 
 import pandas as pd
+import numpy as np
 
 external_stylesheets = [dbc.themes.DARKLY]
 pd.options.plotting.backend = "plotly"
@@ -63,6 +65,8 @@ app.layout = html.Div(
         html.H3("Reviews"),
         dcc.Graph(id="rev_cum", figure=default_fig),
         dcc.Graph(id="rev_daily", figure=default_fig),
+        html.H3("Retention"),
+        dcc.Graph(id="ret_avg", figure=default_fig),
         html.H3("Problem words"),
         dash_table.DataTable(
             id='datatable-struggles',
@@ -90,11 +94,12 @@ app.layout = html.Div(
 
 
 @app.callback(
-    [Output("new_cum", "figure"),Output("new_daily", "figure"),Output("rev_cum", "figure"),Output("rev_daily", "figure"),Output("overall", "figure"),Output("datatable-struggles","data")],
+    [Output("new_cum", "figure"),Output("new_daily", "figure"),Output("rev_cum", "figure"),Output("rev_daily", "figure"),Output("overall", "figure"),\
+        Output("datatable-struggles","data"),Output("ret_avg","figure")],
     [Input("upload-data", "contents"), Input("upload-data", "filename"), Input("timezone", "data")],
 )
 def update_graph(contents, filename, timezone):
-    f_nc = default_fig; f_nd = default_fig; f_rc = default_fig; f_rd = default_fig; f_overall = default_fig; datatable = default_table
+    f_nc = default_fig; f_nd = default_fig; f_rc = default_fig; f_rd = default_fig; f_overall = default_fig; datatable = default_table; f_retention = default_fig
     if (filename is not None) and filename.startswith('vocabulary'):
         contents = contents.split(',')
         contents = contents[1]
@@ -102,19 +107,20 @@ def update_graph(contents, filename, timezone):
         f_rc, f_rd = parse_reviews(rev)
         f_nc, f_nd = parse_new(new)
         f_overall = parse_history(history)
+        f_retention = parse_retention(history)
         datatable = pd.DataFrame(struggles, columns=["Word", "Total Reviews", "Time to Learn", "No. Relapses"]).to_dict('records')
 
-    return [f_nc, f_nd, f_rc, f_rd, f_overall, datatable]
+    return [f_nc, f_nd, f_rc, f_rd, f_overall, datatable, f_retention]
 
 @app.callback(
-    [Output("new_cum", "style"),Output("new_daily", "style"),Output("rev_cum", "style"),Output("rev_daily", "style"), Output("overall", "style")],
+    [Output("new_cum", "style"),Output("new_daily", "style"),Output("rev_cum", "style"),Output("rev_daily", "style"), Output("overall", "style"), Output("ret_avg", "style")],
     [Input("upload-data", "filename")],
 )
 def update_display(filename):
     if (filename is not None) and filename.startswith('vocabulary'):
-        return [{"display":"block"},{"display":"block"},{"display":"block"},{"display":"block"},{"display":"block"}]
+        return [{"display":"block"},{"display":"block"},{"display":"block"},{"display":"block"},{"display":"block"},{"display":"block"}]
     else:
-        return [{"display":"none"},{"display":"none"},{"display":"none"},{"display":"none"},{"display":"none"}]
+        return [{"display":"none"},{"display":"none"},{"display":"none"},{"display":"none"},{"display":"none"},{"display":"none"}]
 
 @app.callback(Output("timezone","data"), [Input("timezone-dropdown","value")])
 def update_timezone(value):
@@ -234,7 +240,30 @@ def parse_history(history):
         xaxis_title="Date",
         template=template
     )
-    return f_history\
+    return f_history
+
+def parse_retention(history):
+    retention_df = pd.DataFrame(history, columns=['Date', 'Failed', 'Passed', 'New'])
+    retention_df = retention_df.groupby('Date').sum()
+    retention_df['Retention'] = 100 * retention_df['Passed'] / (retention_df['Passed'] + retention_df['Failed'])
+    retention_df['Rolling Average'] = retention_df.rolling(7)['Retention'].mean()
+    idx = pd.date_range(retention_df.index.min(), retention_df.index.max())
+    retention_df.index = pd.DatetimeIndex(retention_df.index)
+    retention_df = retention_df.reindex(idx, fill_value=np.nan)
+    f_retention = retention_df.plot(y='Retention', kind='bar')
+    f_retention.add_trace(
+        go.Scatter(
+            name="Rolling Average",
+            x=retention_df.index,
+            y=retention_df["Rolling Average"]
+        ))
+    f_retention.update_layout(
+        title="Retention",
+        yaxis_title="Retention (%)",
+        xaxis_title="Date",
+        template=template
+    )
+    return f_retention
 
 def parse_struggles(entry):
     time_to_learn = 0
