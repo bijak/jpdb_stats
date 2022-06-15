@@ -65,6 +65,9 @@ app.layout = html.Div(
         html.H3("Reviews"),
         dcc.Graph(id="rev_cum", figure=default_fig),
         dcc.Graph(id="rev_daily", figure=default_fig),
+        html.H3("Time Spent"),
+        dcc.Graph(id="time_cum", figure=default_fig),
+        dcc.Graph(id="time_daily", figure=default_fig),
         html.H3("Retention"),
         dcc.Graph(id="ret_avg", figure=default_fig),
         html.H3("Problem words"),
@@ -94,33 +97,34 @@ app.layout = html.Div(
 
 
 @app.callback(
-    [Output("new_cum", "figure"),Output("new_daily", "figure"),Output("rev_cum", "figure"),Output("rev_daily", "figure"),Output("overall", "figure"),\
-        Output("datatable-struggles","data"),Output("ret_avg","figure")],
+    [Output("new_cum", "figure"),Output("new_daily", "figure"),Output("rev_cum", "figure"),Output("rev_daily", "figure"),Output("time_cum", "figure"),\
+        Output("time_daily", "figure"),Output("overall", "figure"),Output("datatable-struggles","data"),Output("ret_avg","figure")],
     [Input("upload-data", "contents"), Input("upload-data", "filename"), Input("timezone", "data")],
 )
 def update_graph(contents, filename, timezone):
-    f_nc = default_fig; f_nd = default_fig; f_rc = default_fig; f_rd = default_fig; f_overall = default_fig; datatable = default_table; f_retention = default_fig
+    f_nc = default_fig; f_nd = default_fig; f_rc = default_fig; f_rd = default_fig; fm_rc = default_fig; fm_rd = default_fig;f_overall = default_fig; datatable = default_table; f_retention = default_fig
     if (filename is not None) and filename.startswith('vocabulary'):
         contents = contents.split(',')
         contents = contents[1]
         new, rev, history, struggles = parse_data(contents, filename, timezone)
-        f_rc, f_rd = parse_reviews(rev)
+        f_rc, f_rd, fm_rc, fm_rd = parse_reviews(rev)
         f_nc, f_nd = parse_new(new)
         f_overall = parse_history(history)
         f_retention = parse_retention(history)
         datatable = pd.DataFrame(struggles, columns=["Word", "Total Reviews", "Time to Learn", "No. Relapses"]).to_dict('records')
 
-    return [f_nc, f_nd, f_rc, f_rd, f_overall, datatable, f_retention]
+    return [f_nc, f_nd, f_rc, f_rd, fm_rc, fm_rd, f_overall, datatable, f_retention]
 
 @app.callback(
-    [Output("new_cum", "style"),Output("new_daily", "style"),Output("rev_cum", "style"),Output("rev_daily", "style"), Output("overall", "style"), Output("ret_avg", "style")],
+    [Output("new_cum", "style"),Output("new_daily", "style"),Output("rev_cum", "style"),Output("rev_daily", "style"),Output("time_cum", "style"),\
+        Output("time_daily", "style"),Output("overall", "style"), Output("ret_avg", "style")],
     [Input("upload-data", "filename")],
 )
 def update_display(filename):
     if (filename is not None) and filename.startswith('vocabulary'):
-        return [{"display":"block"},{"display":"block"},{"display":"block"},{"display":"block"},{"display":"block"},{"display":"block"}]
+        return [{"display":"block"},{"display":"block"},{"display":"block"},{"display":"block"},{"display":"block"},{"display":"block"},{"display":"block"},{"display":"block"}]
     else:
-        return [{"display":"none"},{"display":"none"},{"display":"none"},{"display":"none"},{"display":"none"},{"display":"none"}]
+        return [{"display":"none"},{"display":"none"},{"display":"none"},{"display":"none"},{"display":"none"},{"display":"none"},{"display":"none"},{"display":"none"}]
 
 @app.callback(Output("timezone","data"), [Input("timezone-dropdown","value")])
 def update_timezone(value):
@@ -139,7 +143,7 @@ def parse_data(contents, filename, timezone):
                 continue
             new.append(datetime.utcfromtimestamp(entry['reviews'][0]['timestamp']).astimezone(pytz.timezone(timezone)).date())
             for review in entry['reviews']:
-                rev.append(datetime.utcfromtimestamp(review['timestamp']).astimezone(pytz.timezone(timezone)).date())
+                rev.append(datetime.utcfromtimestamp(review['timestamp']).astimezone(pytz.timezone(timezone)))
             history += parse_entry(entry, timezone)
             struggles += parse_struggles(entry)
     except Exception as e:
@@ -151,7 +155,10 @@ def parse_data(contents, filename, timezone):
 def parse_reviews(rev):
     reviews = pd.DataFrame(rev, columns=['Date'])
     reviews['Count'] = 1
-    reviews = reviews.groupby('Date').sum()
+    reviews_minute = pd.DataFrame(rev, columns=['Date'])
+    reviews_minute["Count"] = 1
+    reviews = reviews.groupby(pd.Grouper(key="Date", freq='1D')).sum()
+    reviews_minute = reviews_minute.groupby(pd.Grouper(key="Date", freq='1Min')).sum()
 
     idx = pd.date_range(reviews.index.min(), reviews.index.max())
     reviews.index = pd.DatetimeIndex(reviews.index)
@@ -173,8 +180,31 @@ def parse_reviews(rev):
         xaxis_title="Date",
         template=template
     )
+    # Time spent
+    reviews_minute.index = pd.DatetimeIndex(reviews_minute.index)
+    reviews_minute["Count"] = reviews_minute['Count'].where(reviews_minute['Count'] == 0, 1)
+    reviews_minute = reviews_minute.groupby(pd.Grouper(freq='D')).sum()
+    idx = pd.date_range(reviews_minute.index.min(), reviews_minute.index.max())
+    reviews_minute = reviews_minute.reindex(idx, fill_value=0)
+    reviews_cum = reviews_minute.cumsum()
+    # Cum. Plot
+    fm_rc = reviews_cum.plot()
+    fm_rc.update_layout(
+        title="Time (Cum.)",
+        yaxis_title="Total time (minutes)",
+        xaxis_title="Date",
+        template=template
+    )
+    # Daily Plot
+    fm_rd = reviews_minute.plot(kind="bar")
+    fm_rd.update_layout(
+        title="Time (Daily)",
+        yaxis_title="Daily time (minutes)",
+        xaxis_title="Date",
+        template=template
+    )
 
-    return f_rc, f_rd
+    return f_rc, f_rd, fm_rc, fm_rd
 
 def parse_new(new_in):
     new = pd.DataFrame(new_in, columns=['Date'])
