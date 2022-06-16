@@ -186,6 +186,7 @@ def parse_reviews(rev):
     reviews_minute = reviews_minute.groupby(pd.Grouper(freq='D')).sum()
     idx = pd.date_range(reviews_minute.index.min(), reviews_minute.index.max())
     reviews_minute = reviews_minute.reindex(idx, fill_value=0)
+    rolling_rm = reviews_minute.rolling(7).mean()
     reviews_cum = reviews_minute.cumsum()
     # Cum. Plot
     fm_rc = reviews_cum.plot()
@@ -197,12 +198,19 @@ def parse_reviews(rev):
     )
     # Daily Plot
     fm_rd = reviews_minute.plot(kind="bar")
+    fm_rd.add_trace(
+        go.Scatter(
+            name="Rolling Average",
+            x=rolling_rm.index,
+            y=rolling_rm["Count"]
+        ))
     fm_rd.update_layout(
         title="Time (Daily)",
         yaxis_title="Daily time (minutes)",
         xaxis_title="Date",
         template=template
     )
+    
 
     return f_rc, f_rd, fm_rc, fm_rd
 
