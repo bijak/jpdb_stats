@@ -121,7 +121,7 @@ def update_graph(contents, filename, timezone):
     [Input("upload-data", "filename")],
 )
 def update_display(filename):
-    if (filename is not None) and filename.startswith('vocabulary'):
+    if (filename is not None):
         return [{"display":"block"},{"display":"block"},{"display":"block"},{"display":"block"},{"display":"block"},{"display":"block"},{"display":"block"},{"display":"block"}]
     else:
         return [{"display":"none"},{"display":"none"},{"display":"none"},{"display":"none"},{"display":"none"},{"display":"none"},{"display":"none"},{"display":"none"}]
@@ -138,7 +138,7 @@ def parse_data(contents, filename, timezone):
     struggles = []
     try:
         reviews_json = json.load(io.StringIO(decoded.decode("utf-8")))
-        for entry in reviews_json["cards_vocabulary_jp_en"]:
+        for entry in (reviews_json["cards_vocabulary_jp_en"] + reviews_json["cards_kanji_char_keyword"] + reviews_json["cards_kanji_keyword_char"]):
             if (len(entry['reviews']) == 0):
                 continue
             new.append(datetime.utcfromtimestamp(entry['reviews'][0]['timestamp']).astimezone(pytz.timezone(timezone)).date())
@@ -233,6 +233,14 @@ def parse_new(new_in):
     )
     # Daily. Plot
     f_nd = new.plot(kind="bar")
+
+    new_rm = new.rolling(7).mean()
+    f_nd.add_trace(
+        go.Scatter(
+            name="Rolling Average",
+            x=new_rm.index,
+            y=new_rm["Count"]
+        ))
     f_nd.update_layout(
         title="New Cards (Daily)",
         yaxis_title="New Cards",
@@ -333,7 +341,7 @@ def parse_struggles(entry):
                 relapses += 1
             if not everKnown:
                 time_to_learn += 1
-    return [[entry['spelling'], len(entry['reviews']), time_to_learn, relapses]]    
+    return [[entry.get('spelling') or ('Kanji: ' + entry['character']), len(entry['reviews']), time_to_learn, relapses]]    
 
 if __name__ == "__main__":
     app.run_server(debug=True)
