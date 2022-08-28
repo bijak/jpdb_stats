@@ -103,7 +103,7 @@ app.layout = html.Div(
 )
 def update_graph(contents, filename, timezone):
     f_nc = default_fig; f_nd = default_fig; f_rc = default_fig; f_rd = default_fig; fm_rc = default_fig; fm_rd = default_fig;f_overall = default_fig; datatable = default_table; f_retention = default_fig
-    if (filename is not None) and filename.startswith('vocabulary'):
+    if (filename is not None):
         contents = contents.split(',')
         contents = contents[1]
         new, rev, history, struggles = parse_data(contents, filename, timezone)
