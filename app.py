@@ -80,7 +80,8 @@ app.layout = html.Div(
             sort_action="native",
             page_action="native",
             page_current= 0,
-            page_size= 25,
+            page_size= 50,
+            export_format="csv",
             style_header={
                 'backgroundColor': 'rgb(30, 30, 30)',
                 'color': 'white'
