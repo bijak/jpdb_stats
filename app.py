@@ -40,7 +40,8 @@ app.layout = dbc.Container(
                         id='timezone-dropdown',
                         options=timezone_list,
                         value=default_tz,
-                        style={'color': 'black'}
+                        style={'color': 'black'},
+                        persistence=True
                     ),
                     dbc.Label("Upload your review history:"),
                     dcc.Upload(
