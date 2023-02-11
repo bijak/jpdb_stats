@@ -72,7 +72,7 @@ app.layout = dbc.Container(
         html.H3("New Cards"),
         dcc.Graph(id="new_cum", figure=default_fig),
         dcc.Graph(id="new_daily", figure=default_fig),
-        html.H3("Reviews"),
+        html.H3("Repetitions"),
         dcc.Graph(id="rev_cum", figure=default_fig),
         dcc.Graph(id="rev_daily", figure=default_fig),
         html.H3("Time Spent"),
