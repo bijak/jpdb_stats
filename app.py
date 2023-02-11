@@ -103,7 +103,8 @@ app.layout = dbc.Container(
         ),
         html.Div(id='datatable-struggles-container')
     ],
-    style={'backgroundColor':colors["background"]}
+    style={'backgroundColor':colors["background"]},
+    fluid=True
 )
 
 
