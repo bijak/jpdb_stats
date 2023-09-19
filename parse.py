@@ -67,8 +67,10 @@ def parse_entry(entry, timezone):
     first_review = True
     for review in entry["reviews"]:
         if first_review:
-            first_reviewed = datetime.utcfromtimestamp(review["timestamp"]).astimezone(
-                pytz.timezone(timezone)
+            first_reviewed = (
+                datetime.utcfromtimestamp(review["timestamp"])
+                .astimezone(pytz.timezone(timezone))
+                .strftime("%Y-%m-%d %H:%M:%S")
             )
             first_review = False
         # The rows are date, fail, pass, new, abandoned, isKnown (state before the review)
