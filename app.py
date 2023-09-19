@@ -18,7 +18,14 @@ template = "plotly_dark"
 colors = {"background": "#111111", "text": "#ffffff"}
 default_fig = {}
 default_df = pd.DataFrame(
-    columns=["Word", "Total Reviews", "Time to Learn", "No. Relapses", "Abandoned"]
+    columns=[
+        "Word",
+        "Total Reviews",
+        "Time to Learn",
+        "No. Relapses",
+        "Abandoned",
+        "First Reviewed",
+    ]
 )
 default_table = default_df.to_dict("records")
 
@@ -151,6 +158,7 @@ def update_graph(contents, filename, timezone):
         f_nc, f_nd = plot.plot_new(new)
         f_overall, f_overall_cum = plot.plot_history(history)
         f_known, f_learn = plot.plot_retention(history)
+        print(struggles[0])
         datatable = pd.DataFrame(
             struggles,
             columns=[
@@ -159,6 +167,7 @@ def update_graph(contents, filename, timezone):
                 "Time to Learn",
                 "No. Relapses",
                 "Abandoned",
+                "First Reviewed",
             ],
         ).to_dict("records")
 
